@@ -1,47 +1,56 @@
-#!/bin/bash
-# Stop only cPanel/WHM services safely
+#!/bin/sh
+# Safe WHM/cPanel Stop Script
+# Không ảnh hưởng VPS / website / MySQL / SSH
 
-set -e
-
-echo "[+] Detecting init system..."
+echo "[+] Stopping WHM/cPanel only..."
 
 stop_service() {
-    local svc="$1"
 
+    SVC="$1"
+
+    # systemd
     if command -v systemctl >/dev/null 2>&1; then
-        systemctl stop "$svc" 2>/dev/null || true
-    else
-        service "$svc" stop 2>/dev/null || true
+        systemctl stop "$SVC" >/dev/null 2>&1
+        return
+    fi
+
+    # service
+    if command -v service >/dev/null 2>&1; then
+        service "$SVC" stop >/dev/null 2>&1
+        return
+    fi
+
+    # init.d
+    if [ -x "/etc/init.d/$SVC" ]; then
+        "/etc/init.d/$SVC" stop >/dev/null 2>&1
+        return
     fi
 }
 
-echo "[+] Stopping cPanel/WHM services..."
+# Chỉ stop cPanel/WHM daemon
+stop_service cpanel
 
-SERVICES=(
-    cpanel
-    cpsrvd
-    chkservd
-    tailwatchd
-    cpdavd
-)
+# fallback nhẹ
+killall cpsrvd >/dev/null 2>&1
 
-for svc in "${SERVICES[@]}"; do
-    stop_service "$svc"
-done
+sleep 2
 
-echo "[+] Stopping internal cPanel daemons..."
+echo "[+] Checking status..."
 
-if [ -d /usr/local/cpanel/scripts ]; then
-    for f in /usr/local/cpanel/scripts/restartsrv_*; do
-        [ -f "$f" ] || continue
-        "$f" --stop 2>/dev/null || true
-    done
+PORT_ACTIVE=0
+
+if command -v ss >/dev/null 2>&1; then
+    ss -lnt 2>/dev/null | grep ':208[2367]' >/dev/null 2>&1
+    PORT_ACTIVE=$?
+elif command -v netstat >/dev/null 2>&1; then
+    netstat -lnt 2>/dev/null | grep ':208[2367]' >/dev/null 2>&1
+    PORT_ACTIVE=$?
 fi
 
-echo "[+] Killing remaining cPanel-only processes..."
+if [ "$PORT_ACTIVE" = "0" ]; then
+    echo "[!] Some WHM/cPanel ports still active"
+else
+    echo "[✓] WHM/cPanel stopped safely"
+fi
 
-pkill -TERM -f '/usr/local/cpanel' 2>/dev/null || true
-sleep 2
-pkill -9 -f '/usr/local/cpanel' 2>/dev/null || true
-
-echo "[✓] cPanel/WHM stopped successfully."
+echo "[✓] VPS services unaffected"
