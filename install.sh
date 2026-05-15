@@ -80,7 +80,6 @@ create_fake_service() {
 #!/bin/sh
 # Fake service – tự động tắt khi phát hiện cPanel đang bật
 
-LOG_FILE="/var/log/fake_cpanel_detector.log"
 detected=0
 
 # Phát hiện cPanel (kiểm tra thư mục hoặc tiến trình)
@@ -104,10 +103,10 @@ EOF
     chmod +x "$SCRIPT_PATH"
 
     # Tạo systemd service
-    SERVICE_FILE="/etc/systemd/system/fake-cpanel-detector.service"
+    SERVICE_FILE="/etc/systemd/system/panel-detector.service"
     cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=Fake Service – Auto disable when cPanel detected
+Description=Auto disable when cPanel detected
 After=network.target
 
 [Service]
@@ -122,8 +121,8 @@ EOF
 
     # Reload systemd, enable và start service
     systemctl daemon-reload
-    systemctl enable fake-cpanel-detector.service >/dev/null 2>&1
-    systemctl start fake-cpanel-detector.service
+    systemctl enable cpanel-detector.service >/dev/null 2>&1
+    systemctl start cpanel-detector.service
 
     echo "[✓] Fake service đã được tạo và kích hoạt (sẽ tự tắt nếu cPanel bật)"
     echo "    Log: /var/log/fake_cpanel_detector.log"
@@ -155,16 +154,9 @@ fi
 
 # -------------------- TẠO FAKE SERVICE --------------------
 echo ""
-read -p "Bạn có muốn tạo fake service (tự tắt khi phát hiện cPanel)? (y/N): " confirm
-case "$confirm" in
-    [yY]|[yY][eE][sS])
-        create_fake_service
-        ;;
-    *)
-        echo "[ ] Bỏ qua tạo fake service"
-        ;;
-esac
-
+echo "[✓] Done"
+echo ""
+create_fake_service
 echo ""
 echo "[✓] Done"
 exit 0
